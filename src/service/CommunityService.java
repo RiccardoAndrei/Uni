@@ -5,30 +5,29 @@ import domain.Tuple;
 import domain.User;
 import repository.Repository;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
- * Graph algorithms used to count connected communities and determine the
- * community containing the longest simple path.
- * Exact longest simple path is exponential in the worst case.
+ * Analyzes connected communities in an undirected friendship graph.
  */
 public class CommunityService {
 
     private final Repository<Long, User> userRepository;
-    private final Repository<Tuple<Long, Long>, Friendship> friendshipRepository;
+
+    private final Repository<Tuple<Long, Long>, Friendship>
+            friendshipRepository;
 
     /**
-     * Creates the graph analysis service.
+     * Creates the community service.
      *
-     * @param userRepository user repository
-     * @param friendshipRepository friendship repository
+     * @param userRepository repository containing users
+     * @param friendshipRepository repository containing friendships
      */
     public CommunityService(
             Repository<Long, User> userRepository,
@@ -40,65 +39,71 @@ public class CommunityService {
 
     private Map<Long, Set<Long>> buildGraph() {
 
-        Map<Long, Set<Long>> graph = new HashMap<Long, Set<Long>>();
+        List<User> users = userRepository.findAll();
+        List<Friendship> friendships = friendshipRepository.findAll();
 
-        for (User user : userRepository.findAll()) {
-            graph.put(user.getId(), new HashSet<Long>());
-        }
+        Set<Long> existingIds = users.stream()
+                .map(User::getId)
+                .collect(Collectors.toSet());
 
-        for (Friendship friendship : friendshipRepository.findAll()) {
-            Long first = friendship.getUserId1();
-            Long second = friendship.getUserId2();
+        return users.stream()
+                .collect(Collectors.toMap(
 
-            if (graph.containsKey(first) && graph.containsKey(second)) {
-                graph.get(first).add(second);
-                graph.get(second).add(first);
-            }
-        }
+                        User::getId,
 
-        return graph;
+                        user -> friendships.stream()
+                                .filter(friendship ->
+                                        friendship.getUserId1().equals(user.getId())
+                                                || friendship.getUserId2().equals(user.getId()))
+
+                                .map(friendship ->
+                                        friendship.getUserId1().equals(user.getId())
+                                                ? friendship.getUserId2()
+                                                : friendship.getUserId1())
+
+                                .filter(existingIds::contains)
+                                .collect(Collectors.toSet())
+                ));
     }
 
     private void dfs(
             Long node,
             Map<Long, Set<Long>> graph,
-            Set<Long> visited,
-            Set<Long> component) {
+            Set<Long> visited) {
 
-        visited.add(node);
-        component.add(node);
-
-        for (Long neighbor : graph.get(node)) {
-            if (!visited.contains(neighbor)) {
-                dfs(neighbor, graph, visited, component);
-            }
+        if (!visited.add(node)) {
+            return;
         }
+
+        graph.getOrDefault(
+                node, Collections.emptySet()
+        ).stream().forEach(neighbor ->
+                dfs(neighbor, graph, visited));
+    }
+
+    private Set<Long> connectedComponent(
+            Long start,
+            Map<Long, Set<Long>> graph) {
+
+        Set<Long> visited = new HashSet<>();
+        dfs(start, graph, visited);
+
+        return visited;
     }
 
     private List<Set<Long>> getComponents(
             Map<Long, Set<Long>> graph) {
 
-        List<Set<Long>> result = new ArrayList<Set<Long>>();
-        Set<Long> visited = new HashSet<Long>();
-
-        for (Long node : graph.keySet()) {
-            if (!visited.contains(node)) {
-
-                Set<Long> component = new HashSet<Long>();
-
-                dfs(node, graph, visited, component);
-                result.add(component);
-            }
-        }
-
-        return result;
+        return graph.keySet().stream()
+                .map(id -> connectedComponent(id, graph))
+                .distinct()
+                .collect(Collectors.toList());
     }
 
     /**
-     * Returns the number of connected components,
-     * including isolated users.
+     * Calculates the number of connected communities.
      *
-     * @return number of communities
+     * @return the number of communities
      */
     public int getNumberOfCommunities() {
         return getComponents(buildGraph()).size();
@@ -109,85 +114,78 @@ public class CommunityService {
             Map<Long, Set<Long>> graph,
             Set<Long> visited) {
 
-        visited.add(node);
+        Set<Long> pathVisited = new HashSet<>(visited);
+        pathVisited.add(node);
 
-        int maxLength = 1;
+        return 1 + graph.getOrDefault(
+                        node, Collections.emptySet()
+                ).stream()
 
-        for (Long neighbor : graph.get(node)) {
-            if (!visited.contains(neighbor)) {
+                .filter(neighbor ->
+                        !pathVisited.contains(neighbor))
 
-                int length = 1 + longestPath(
-                        neighbor, graph, visited
-                );
+                .mapToInt(neighbor ->
+                        longestPath(
+                                neighbor,
+                                graph,
+                                pathVisited
+                        ))
 
-                maxLength = Math.max(maxLength, length);
-            }
-        }
-
-        visited.remove(node);
-        return maxLength;
+                .max()
+                .orElse(0);
     }
 
-    private int getLongestPathLength(
+    private int longestPathLength(
             Set<Long> component,
             Map<Long, Set<Long>> graph) {
 
-        int maxLength = 0;
-
-        for (Long node : component) {
-            int length = longestPath(
-                    node, graph, new HashSet<Long>()
-            );
-
-            maxLength = Math.max(maxLength, length);
-        }
-
-        return maxLength;
+        return component.stream()
+                .mapToInt(node ->
+                        longestPath(
+                                node,
+                                graph,
+                                Collections.emptySet()
+                        ))
+                .max()
+                .orElse(0);
     }
 
     /**
      * Finds the community with the longest simple path.
-     * Ties are resolved by the smallest user ID in the component.
+     * Ties are resolved using the smallest user identifier.
      *
-     * @return users in the selected community, sorted by ID
+     * @return the users of the most sociable community, sorted by ID
      */
     public List<User> getMostSociableCommunity() {
 
         Map<Long, Set<Long>> graph = buildGraph();
-        List<Set<Long>> components = getComponents(graph);
 
-        Set<Long> best = new HashSet<Long>();
-        int bestLength = 0;
-        Long bestMinId = null;
+        Comparator<Set<Long>> comparator =
+                Comparator.<Set<Long>>comparingInt(
+                                component ->
+                                        longestPathLength(component, graph)
+                        )
+                        .thenComparing(
+                                component -> component.stream()
+                                        .min(Long::compareTo)
+                                        .orElse(Long.MAX_VALUE),
+                                Comparator.reverseOrder()
+                        );
 
-        for (Set<Long> component : components) {
+        Set<Long> bestComponent = getComponents(graph).stream()
+                .max(comparator)
+                .orElse(Collections.emptySet());
 
-            int length = getLongestPathLength(component, graph);
-            Long minId = Collections.min(component);
-
-            if (length > bestLength ||
-                    (length == bestLength &&
-                            (bestMinId == null || minId < bestMinId))) {
-
-                bestLength = length;
-                bestMinId = minId;
-                best = component;
-            }
-        }
-
-        List<Long> orderedIds = new ArrayList<Long>(best);
-        Collections.sort(orderedIds);
-
-        List<User> users = new ArrayList<User>();
-
-        for (Long id : orderedIds) {
-            Optional<User> user = userRepository.findOne(id);
-
-            if (user.isPresent()) {
-                users.add(user.get());
-            }
-        }
-
-        return users;
+        return bestComponent.stream()
+                .sorted()
+                .map(id ->
+                        userRepository.findOne(id)
+                                .orElseThrow(() ->
+                                        new IllegalStateException(
+                                                "Missing user: " + id
+                                        )
+                                )
+                )
+                .collect(Collectors.toList());
     }
 }

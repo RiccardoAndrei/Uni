@@ -1,9 +1,11 @@
-2;Ion;Ionescu
-3;Maria;Georgescu
-4;Alex;Popa
-5;Dan;Marin
-6;Andrei;Stan
-7;Elena;Dumitrescu
-8;Mihai;Radu
-9;Ioana;Petrescu
-10;Vlad;Constantin
+1;Ana;Popescu;Cluj-Napoca;ana.popescu@example.com;2003-05-17
+2;Ion;Ionescu;Alba Iulia;ion.ionescu@example.com;2002-08-24
+3;Maria;Georgescu;Bucuresti;maria.georgescu@example.com;2004-02-12
+4;Alex;Popa;Sibiu;alex.popa@example.com;2001-11-05
+5;Dan;Marin;Brasov;dan.marin@example.com;2003-07-19
+6;Andrei;Stan;Timisoara;andrei.stan@example.com;2002-03-28
+7;Elena;Dumitrescu;Oradea;elena.dumitrescu@example.com;2004-09-14
+8;Mihai;Radu;Iasi;mihai.radu@example.com;2001-12-30
+9;Ioana;Petrescu;Targu Mures;ioana.petrescu@example.com;2003-06-08
+10;Vlad;Constantin;Constanta;vlad.constantin@example.com;2002-10-21
+11;Andrei;Rusu;Cluj-Napoca;andreirusu406@gmail.com;2007-05-25

@@ -4,6 +4,7 @@ import domain.Friendship;
 import domain.Tuple;
 import domain.User;
 import exceptions.RepositoryException;
+import exceptions.ValidationException;
 import repository.InMemoryRepository;
 import repository.Repository;
 import repository.RepositoryType;
@@ -11,51 +12,48 @@ import repository.db.PrietenieDbRepository;
 import repository.db.UtilizatorDbRepository;
 import repository.file.PrietenieFileRepository;
 import repository.file.UtilizatorFileRepository;
-import validation.FriendshipWithUsersValidator;
 import validation.Validator;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
-import java.util.Optional;
+import java.util.EnumMap;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
-import java.nio.file.Files;
+import java.util.function.Function;
 
 /**
- * Simple Factory that creates concrete repositories according to configuration.
- * All repositories use the same persistence type.
+ * Creates repositories according to the configured persistence type.
+ * Uses a map of factory functions instead of a switch.
  */
 public class RepositoryFactory {
 
-    private final Properties properties;
+    private final Properties properties = new Properties();
     private final RepositoryType type;
 
     private Repository<Long, User> userRepository;
-    private Repository<Tuple<Long, Long>, Friendship> friendshipRepository;
+
+    private Repository<Tuple<Long, Long>, Friendship>
+            friendshipRepository;
 
     /**
-     * Loads and validates the application configuration.
+     * Loads repository configuration from config.properties.
      *
      * @throws RepositoryException if configuration is missing or invalid
      */
     public RepositoryFactory() {
-        properties = new Properties();
+        Path configPath = Path.of(
+                "src/main/resources/config.properties"
+        );
 
-        try (InputStream input = Files.newInputStream(
-                Path.of("src/main/resources/config.properties"))) {
-            if (input == null) {
-                throw new RepositoryException(
-                        "Missing src/main/resources/config.properties on the classpath."
-                );
-            }
-
+        try (InputStream input = Files.newInputStream(configPath)) {
             properties.load(input);
 
         } catch (IOException e) {
             throw new RepositoryException(
-                    "Cannot read config.properties.", e
+                    "Cannot read configuration: " + configPath, e
             );
         }
 
@@ -63,13 +61,12 @@ public class RepositoryFactory {
 
         try {
             type = RepositoryType.valueOf(
-                    rawType.toUpperCase(java.util.Locale.ROOT)
+                    rawType.toUpperCase(Locale.ROOT)
             );
 
         } catch (IllegalArgumentException e) {
             throw new RepositoryException(
-                    "Unknown repository.type: '" + rawType
-                            + "'. Expected MEMORY, FILE or DATABASE.", e
+                    "Invalid repository.type: " + rawType, e
             );
         }
 
@@ -80,21 +77,12 @@ public class RepositoryFactory {
         required("db.password");
     }
 
-    /**
-     * Returns the selected persistence type.
-     *
-     * @return configured repository type
-     */
-    public RepositoryType getType() {
-        return type;
-    }
-
     private String required(String key) {
         String value = properties.getProperty(key);
 
         if (value == null || value.isBlank()) {
             throw new RepositoryException(
-                    "Missing or empty configuration key: " + key
+                    "Missing configuration key: " + key
             );
         }
 
@@ -102,18 +90,27 @@ public class RepositoryFactory {
     }
 
     /**
-     * Creates the user repository according to the configured type.
+     * Returns the selected repository type.
      *
-     * @param validator user validation strategy
-     * @return abstract user repository
-     * @throws RepositoryException if initialization fails
+     * @return the repository type
+     */
+    public RepositoryType getType() {
+        return type;
+    }
+
+    /**
+     * Creates the configured user repository.
+     *
+     * @param validator the user validator
+     * @return the user repository
+     * @throws IllegalArgumentException if validator is null
      */
     public Repository<Long, User> createUtilizatorRepository(
             Validator<User> validator) {
 
         if (validator == null) {
             throw new IllegalArgumentException(
-                    "User validator must not be null."
+                    "Validator must not be null."
             );
         }
 
@@ -121,56 +118,59 @@ public class RepositoryFactory {
             return userRepository;
         }
 
-        switch (type) {
-            case MEMORY:
-                userRepository =
-                        new InMemoryRepository<Long, User>(validator);
-                break;
+        Map<RepositoryType,
+                Function<Validator<User>, Repository<Long, User>>>
+                creators = new EnumMap<>(RepositoryType.class);
 
-            case FILE:
-                userRepository = new UtilizatorFileRepository(
-                        Path.of(required("users.file")), validator
-                );
-                break;
+        creators.put(
+                RepositoryType.MEMORY,
+                InMemoryRepository::new
+        );
 
-            case DATABASE:
-                userRepository = new UtilizatorDbRepository(
-                        validator,
+        creators.put(
+                RepositoryType.FILE,
+                v -> new UtilizatorFileRepository(
+                        Path.of(required("users.file")),
+                        v
+                )
+        );
+
+        creators.put(
+                RepositoryType.DATABASE,
+                v -> new UtilizatorDbRepository(
+                        v,
                         required("db.url"),
                         required("db.user"),
                         required("db.password")
-                );
-                break;
+                )
+        );
 
-            default:
-                throw new RepositoryException(
-                        "Unsupported repository type: " + type
-                );
-        }
+        userRepository = creators.get(type).apply(validator);
 
         return userRepository;
     }
 
     /**
-     * Creates the friendship repository and reconstructs friend lists.
+     * Creates the configured friendship repository.
+     * Adds a lambda rule requiring both users to exist.
      *
-     * @param validator friendship validation strategy
-     * @return abstract friendship repository
+     * @param validator the friendship validator
+     * @return the friendship repository
+     * @throws IllegalArgumentException if validator is null
      * @throws IllegalStateException if user repository is not initialized
-     * @throws RepositoryException if initialization fails
      */
     public Repository<Tuple<Long, Long>, Friendship>
     createPrietenieRepository(Validator<Friendship> validator) {
 
         if (validator == null) {
             throw new IllegalArgumentException(
-                    "Friendship validator must not be null."
+                    "Validator must not be null."
             );
         }
 
         if (userRepository == null) {
             throw new IllegalStateException(
-                    "Create the user repository first."
+                    "Create user repository first."
             );
         }
 
@@ -178,40 +178,54 @@ public class RepositoryFactory {
             return friendshipRepository;
         }
 
-        Validator<Friendship> validatedWithUsers =
-                new FriendshipWithUsersValidator(
-                        validator, userRepository
-                );
+        Validator<Friendship> validatorWithUsers =
+                validator.andThen(friendship -> {
 
-        switch (type) {
-            case MEMORY:
-                friendshipRepository =
-                        new InMemoryRepository<Tuple<Long, Long>, Friendship>(
-                                validatedWithUsers
+                    boolean firstExists = userRepository
+                            .findOne(friendship.getUserId1())
+                            .isPresent();
+
+                    boolean secondExists = userRepository
+                            .findOne(friendship.getUserId2())
+                            .isPresent();
+
+                    if (!firstExists || !secondExists) {
+                        throw new ValidationException(
+                                "Friendship contains a nonexistent user."
                         );
-                break;
+                    }
+                });
 
-            case FILE:
-                friendshipRepository = new PrietenieFileRepository(
+        Map<RepositoryType,
+                Function<Validator<Friendship>,
+                        Repository<Tuple<Long, Long>, Friendship>>>
+                creators = new EnumMap<>(RepositoryType.class);
+
+        creators.put(
+                RepositoryType.MEMORY,
+                InMemoryRepository::new
+        );
+
+        creators.put(
+                RepositoryType.FILE,
+                v -> new PrietenieFileRepository(
                         Path.of(required("friendships.file")),
-                        validatedWithUsers
-                );
-                break;
+                        v
+                )
+        );
 
-            case DATABASE:
-                friendshipRepository = new PrietenieDbRepository(
-                        validatedWithUsers,
+        creators.put(
+                RepositoryType.DATABASE,
+                v -> new PrietenieDbRepository(
+                        v,
                         required("db.url"),
                         required("db.user"),
                         required("db.password")
-                );
-                break;
+                )
+        );
 
-            default:
-                throw new RepositoryException(
-                        "Unsupported repository type: " + type
-                );
-        }
+        friendshipRepository =
+                creators.get(type).apply(validatorWithUsers);
 
         if (type == RepositoryType.FILE) {
             rebuildFriendLists();
@@ -221,19 +235,15 @@ public class RepositoryFactory {
     }
 
     private void rebuildFriendLists() {
-        List<Friendship> friendships = friendshipRepository.findAll();
+        friendshipRepository.findAll().forEach(friendship -> {
 
-        for (Friendship friendship : friendships) {
-            Optional<User> first =
-                    userRepository.findOne(friendship.getUserId1());
+            userRepository.findOne(friendship.getUserId1())
+                    .ifPresent(user ->
+                            user.addFriend(friendship.getUserId2()));
 
-            Optional<User> second =
-                    userRepository.findOne(friendship.getUserId2());
-
-            if (first.isPresent() && second.isPresent()) {
-                first.get().addFriend(friendship.getUserId2());
-                second.get().addFriend(friendship.getUserId1());
-            }
-        }
+            userRepository.findOne(friendship.getUserId2())
+                    .ifPresent(user ->
+                            user.addFriend(friendship.getUserId1()));
+        });
     }
 }

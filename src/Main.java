@@ -1,31 +1,33 @@
 import domain.Friendship;
 import domain.Tuple;
 import domain.User;
+
 import exceptions.RepositoryException;
+import exceptions.ValidationException;
+
 import repository.Repository;
 import repository.factory.RepositoryFactory;
+
 import service.CommunityService;
 import service.FriendshipService;
 import service.UserService;
+
 import ui.ConsoleUI;
+
 import validation.FriendshipValidator;
 import validation.UserValidator;
+import validation.Validator;
 
 /**
- * Application entry point.
- * Depends only on repository abstractions and the factory,
- * not on concrete repository implementations.
+ * Main entry point for the Lab 4 social network application.
  */
 public class Main {
-     /**
-     * Prevents instantiation of the entry-point class.
-     */
+
     private Main() {
     }
 
     /**
-     * Initializes the configured repositories,
-     * services and console interface.
+     * Initializes repositories, services and the console interface.
      *
      * @param args unused command-line arguments
      */
@@ -34,12 +36,26 @@ public class Main {
         try {
             RepositoryFactory factory = new RepositoryFactory();
 
+            // Compose a new rule using a lambda.
+            Validator<User> userValidator =
+                    new UserValidator().andThen(user -> {
+
+                        if (user.getFirstName().length() > 50
+                                || user.getLastName().length() > 50) {
+
+                            throw new ValidationException(
+                                    "Names may contain at most 50 characters."
+                            );
+                        }
+                    });
+
             Repository<Long, User> userRepository =
                     factory.createUtilizatorRepository(
-                            new UserValidator()
+                            userValidator
                     );
 
-            Repository<Tuple<Long, Long>, Friendship> friendshipRepository =
+            Repository<Tuple<Long, Long>, Friendship>
+                    friendshipRepository =
                     factory.createPrietenieRepository(
                             new FriendshipValidator()
                     );
@@ -47,7 +63,7 @@ public class Main {
             UserService userService = new UserService(
                     userRepository,
                     friendshipRepository,
-                    new UserValidator()
+                    userValidator
             );
 
             FriendshipService friendshipService = new FriendshipService(
@@ -61,27 +77,26 @@ public class Main {
                     friendshipRepository
             );
 
+            System.out.println(
+                    "Repository type: " + factory.getType()
+            );
+
             ConsoleUI ui = new ConsoleUI(
                     userService,
                     friendshipService,
                     communityService
             );
 
-            System.out.println(
-                    "Selected repository type: " + factory.getType()
-            );
-
             ui.run();
 
         } catch (RepositoryException e) {
             System.err.println(
-                    "Startup configuration / persistence error: "
-                            + e.getMessage()
+                    "Startup error: " + e.getMessage()
             );
 
         } catch (IllegalArgumentException e) {
             System.err.println(
-                    "Startup argument error: " + e.getMessage()
+                    "Invalid configuration: " + e.getMessage()
             );
         }
     }

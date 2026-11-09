@@ -1,7 +1,10 @@
+
 package validation;
 
 import domain.User;
 import exceptions.ValidationException;
+
+import java.time.LocalDate;
 
 /**
  * Validates a user and reports all validation errors
@@ -10,15 +13,19 @@ import exceptions.ValidationException;
 public class UserValidator implements Validator<User> {
 
     /**
-     * Validates the user's identifier, first name and last name.
+     * Validates the identifier, names and profile information.
+     * Legacy users without profile information are also accepted.
      *
-     * @param user the user to validate
-     * @throws ValidationException if the user is invalid
+     * @param user user to validate
+     * @throws ValidationException if the user contains invalid data
      */
     @Override
     public void validate(User user) {
+
         if (user == null) {
-            throw new ValidationException("User cannot be null.");
+            throw new ValidationException(
+                    "User cannot be null."
+            );
         }
 
         StringBuilder errors = new StringBuilder();
@@ -34,12 +41,15 @@ public class UserValidator implements Validator<User> {
             errors.append("First name cannot be empty.\n");
         } else {
             if (!Character.isUpperCase(firstName.charAt(0))) {
-                errors.append("First name must start with an uppercase letter.\n");
+                errors.append(
+                        "First name must start with an uppercase letter.\n"
+                );
             }
-            if (firstName.contains(";") ||
-                    firstName.contains("\n") ||
-                    firstName.contains("\r")) {
-                errors.append("First name contains invalid characters.\n");
+
+            if (containsInvalidCharacters(firstName)) {
+                errors.append(
+                        "First name contains invalid characters.\n"
+                );
             }
         }
 
@@ -47,12 +57,56 @@ public class UserValidator implements Validator<User> {
             errors.append("Last name cannot be empty.\n");
         } else {
             if (!Character.isUpperCase(lastName.charAt(0))) {
-                errors.append("Last name must start with an uppercase letter.\n");
+                errors.append(
+                        "Last name must start with an uppercase letter.\n"
+                );
             }
-            if (lastName.contains(";") ||
-                    lastName.contains("\n") ||
-                    lastName.contains("\r")) {
-                errors.append("Last name contains invalid characters.\n");
+
+            if (containsInvalidCharacters(lastName)) {
+                errors.append(
+                        "Last name contains invalid characters.\n"
+                );
+            }
+        }
+
+        String city = user.getCity();
+        String email = user.getEmail();
+        LocalDate birthDate = user.getBirthDate();
+
+        boolean hasCity = city != null && !city.isBlank();
+        boolean hasEmail = email != null && !email.isBlank();
+        boolean hasBirthDate = birthDate != null;
+
+        // Old Lab 3 users can have all three fields missing.
+        boolean legacyProfile =
+                !hasCity && !hasEmail && !hasBirthDate;
+
+        if (!legacyProfile) {
+
+            if (!hasCity) {
+                errors.append("City cannot be empty.\n");
+            } else if (containsInvalidCharacters(city)) {
+                errors.append(
+                        "City contains invalid characters.\n"
+                );
+            }
+
+            if (!hasEmail) {
+                errors.append("Email cannot be empty.\n");
+
+            } else if (!email.matches(
+                    "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"
+            )) {
+                errors.append("Invalid email address.\n");
+            }
+
+            if (!hasBirthDate) {
+                errors.append("Birth date cannot be empty.\n");
+
+            } else if (birthDate.isAfter(LocalDate.now())) {
+                errors.append(
+                        "Birth date cannot be in the future.\n"
+                );
             }
         }
 
@@ -60,5 +114,12 @@ public class UserValidator implements Validator<User> {
             throw new ValidationException(errors.toString());
         }
     }
+
+    private boolean containsInvalidCharacters(String value) {
+        return value.contains(";")
+                || value.contains("\n")
+                || value.contains("\r");
+    }
 }
+
 

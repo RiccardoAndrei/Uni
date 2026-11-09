@@ -1,3 +1,4 @@
+
 package ui;
 
 import domain.Friendship;
@@ -9,11 +10,13 @@ import service.CommunityService;
 import service.FriendshipService;
 import service.UserService;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Scanner;
 
 /**
- * Console interface for social-network operations and error display.
+ * Console interface for the social network application.
  */
 public class ConsoleUI {
 
@@ -23,11 +26,11 @@ public class ConsoleUI {
     private final Scanner scanner;
 
     /**
-     * Creates the user interface.
+     * Creates the console interface.
      *
      * @param users user service
      * @param friendships friendship service
-     * @param communities community analysis service
+     * @param communities community service
      */
     public ConsoleUI(
             UserService users,
@@ -41,7 +44,7 @@ public class ConsoleUI {
     }
 
     private void printMenu() {
-        System.out.println("\nRetea de socializare\n");
+        System.out.println("\n===== SOCIAL NETWORK =====");
         System.out.println("1. Add user");
         System.out.println("2. Remove user");
         System.out.println("3. Add friendship");
@@ -60,6 +63,7 @@ public class ConsoleUI {
     }
 
     private void addUser() {
+
         Long id = readLong("User ID: ");
 
         System.out.print("First name: ");
@@ -68,17 +72,44 @@ public class ConsoleUI {
         System.out.print("Last name: ");
         String lastName = scanner.nextLine();
 
-        users.addUser(id, firstName, lastName);
+        System.out.print("City: ");
+        String city = scanner.nextLine();
+
+        System.out.print("Email: ");
+        String email = scanner.nextLine();
+
+        System.out.print("Birth date (YYYY-MM-DD): ");
+        String dateText = scanner.nextLine().trim();
+
+        LocalDate birthDate;
+
+        try {
+            birthDate = LocalDate.parse(dateText);
+
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException(
+                    "Birth date must use YYYY-MM-DD format.", e
+            );
+        }
+
+        users.addUser(
+                id,
+                firstName,
+                lastName,
+                city,
+                email,
+                birthDate
+        );
 
         System.out.println("User saved.");
     }
 
     private void removeUser() {
-        users.removeUser(readLong("User ID: "));
+        Long id = readLong("User ID: ");
 
-        System.out.println(
-                "User and their friendships deleted."
-        );
+        users.removeUser(id);
+
+        System.out.println("User and friendships deleted.");
     }
 
     private void addFriendship() {
@@ -106,9 +137,7 @@ public class ConsoleUI {
             System.out.println("No users.");
         }
 
-        for (User user : list) {
-            System.out.println(user);
-        }
+        list.forEach(System.out::println);
     }
 
     private void showFriendships() {
@@ -118,31 +147,28 @@ public class ConsoleUI {
             System.out.println("No friendships.");
         }
 
-        for (Friendship friendship : list) {
-            System.out.println(friendship);
-        }
+        list.forEach(System.out::println);
     }
 
     private void showMostSociableCommunity() {
-        List<User> users = communities.getMostSociableCommunity();
+        List<User> list =
+                communities.getMostSociableCommunity();
 
-        if (users.isEmpty()) {
+        if (list.isEmpty()) {
             System.out.println("No users.");
 
         } else {
             System.out.println("Most sociable community:");
-
-            for (User user : users) {
-                System.out.println(user);
-            }
+            list.forEach(System.out::println);
         }
     }
 
     /**
-     * Runs the console menu until the user chooses to exit.
-     * User-facing exceptions are reported without terminating the application.
+     * Runs the console menu until the user exits.
+     * Displays application errors without terminating the menu.
      */
     public void run() {
+
         boolean running = true;
 
         while (running) {
@@ -197,7 +223,7 @@ public class ConsoleUI {
                         break;
 
                     default:
-                        System.out.println("Unknown menu option.");
+                        System.out.println("Unknown option.");
                         break;
                 }
 
@@ -213,17 +239,17 @@ public class ConsoleUI {
 
             } catch (RepositoryException e) {
                 System.out.println(
-                        "Persistence error: " + e.getMessage()
+                        "Repository error: " + e.getMessage()
                 );
 
             } catch (ServiceException e) {
                 System.out.println(
-                        "Operation error: " + e.getMessage()
+                        "Service error: " + e.getMessage()
                 );
 
             } catch (UnsupportedOperationException e) {
                 System.out.println(
-                        "Not implemented yet: " + e.getMessage()
+                        "Operation not implemented: " + e.getMessage()
                 );
 
             } catch (IllegalArgumentException e) {
@@ -234,3 +260,4 @@ public class ConsoleUI {
         }
     }
 }
+

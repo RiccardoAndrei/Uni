@@ -9,28 +9,31 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
- * HashMap-backed generic repository, with no on-disk persistence.
+ * Generic in-memory repository using a HashMap.
  *
- * @param <ID> identifier type
- * @param <E> entity type
+ * @param <ID> the identifier type
+ * @param <E> the entity type
  */
 public class InMemoryRepository<ID, E extends Entity<ID>>
         implements Repository<ID, E> {
 
-    private final Map<ID, E> entities = new HashMap<ID, E>();
+    private final Map<ID, E> entities = new HashMap<>();
     private final Validator<E> validator;
 
     /**
-     * Constructs an empty repository with an injected validation strategy.
+     * Creates an empty repository.
      *
-     * @param validator validation strategy for entities
+     * @param validator the validation strategy
      * @throws IllegalArgumentException if validator is null
      */
     public InMemoryRepository(Validator<E> validator) {
         if (validator == null) {
-            throw new IllegalArgumentException("Validator must not be null.");
+            throw new IllegalArgumentException(
+                    "Validator must not be null."
+            );
         }
 
         this.validator = validator;
@@ -44,7 +47,7 @@ public class InMemoryRepository<ID, E extends Entity<ID>>
 
         if (entities.containsKey(entity.getId())) {
             throw new RepositoryException(
-                    "An entity with this ID already exists: " + entity.getId()
+                    "Entity already exists: " + entity.getId()
             );
         }
 
@@ -61,7 +64,8 @@ public class InMemoryRepository<ID, E extends Entity<ID>>
     /** {@inheritDoc} */
     @Override
     public List<E> findAll() {
-        return new ArrayList<E>(entities.values());
+        return entities.values().stream()
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 
     /** {@inheritDoc} */
@@ -79,7 +83,7 @@ public class InMemoryRepository<ID, E extends Entity<ID>>
 
         if (!entities.containsKey(entity.getId())) {
             throw new RepositoryException(
-                    "Entity not found for update: " + entity.getId()
+                    "Entity does not exist: " + entity.getId()
             );
         }
 
@@ -87,27 +91,29 @@ public class InMemoryRepository<ID, E extends Entity<ID>>
     }
 
     /**
-     * Validates the identifier according to the Repository contract.
+     * Checks whether an identifier is valid.
      *
-     * @param id identifier to check
-     * @throws IllegalArgumentException for a null identifier
+     * @param id the identifier
+     * @throws IllegalArgumentException if id is null
      */
     protected void checkId(ID id) {
         if (id == null) {
-            throw new IllegalArgumentException("Entity ID must not be null.");
+            throw new IllegalArgumentException(
+                    "Entity ID must not be null."
+            );
         }
     }
 
     /**
-     * Validates the entity and identifier according to the Repository contract.
+     * Checks whether an entity and its ID are valid.
      *
-     * @param entity entity to check
-     * @throws IllegalArgumentException for a null entity or identifier
+     * @param entity the entity to check
+     * @throws IllegalArgumentException if entity or ID is null
      */
     protected void checkEntity(E entity) {
         if (entity == null || entity.getId() == null) {
             throw new IllegalArgumentException(
-                    "Entity and entity ID must not be null."
+                    "Entity and ID must not be null."
             );
         }
     }

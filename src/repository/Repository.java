@@ -1,3 +1,4 @@
+
 package repository;
 
 import domain.Entity;
@@ -5,59 +6,81 @@ import exceptions.RepositoryException;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
- * Generic storage contract for domain entities.
- * Implementations must reject null identifiers and duplicate saves.
+ * Generic repository interface for storing domain entities.
  *
- * @param <ID> identifier type
- * @param <E> entity type
+ * @param <ID> the type of the entity identifier
+ * @param <E> the type of stored entity
  */
 public interface Repository<ID, E extends Entity<ID>> {
 
     /**
      * Saves a new entity.
      *
-     * @param entity entity to save
-     * @throws IllegalArgumentException if entity or its identifier is null
-     * @throws RepositoryException if the identifier already exists or persistence fails
+     * @param entity the entity to save
+     * @throws IllegalArgumentException if entity or its ID is null
+     * @throws RepositoryException if the entity already exists
+     *         or persistence fails
      */
     void save(E entity);
 
     /**
-     * Finds an entity by ID.
+     * Finds an entity by its identifier.
      *
-     * @param id entity identifier
-     * @return entity wrapped in Optional, or Optional.empty()
+     * @param id the identifier
+     * @return an Optional containing the entity if found
      * @throws IllegalArgumentException if id is null
-     * @throws RepositoryException if reading from persistent storage fails
      */
     Optional<E> findOne(ID id);
 
     /**
-     * Returns a snapshot list of entities.
+     * Returns all stored entities.
      *
-     * @return all stored entities
-     * @throws RepositoryException if reading from persistent storage fails
+     * @return a list of entities
      */
     List<E> findAll();
 
     /**
-     * Deletes an entity by ID.
+     * Returns entities matching a predicate.
      *
-     * @param id entity identifier
-     * @return true if the entity existed and was deleted; false otherwise
+     * @param filter the filtering predicate
+     * @return a list of matching entities
+     * @throws IllegalArgumentException if filter is null
+     */
+    default List<E> findAll(Predicate<E> filter) {
+
+        if (filter == null) {
+            throw new IllegalArgumentException(
+                    "Filter must not be null."
+            );
+        }
+
+        return findAll().stream()
+                .filter(filter)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Deletes an entity by its identifier.
+     *
+     * @param id the entity identifier
+     * @return true if the entity was deleted, false otherwise
      * @throws IllegalArgumentException if id is null
      * @throws RepositoryException if persistence fails
      */
     boolean delete(ID id);
 
     /**
-     * Replaces an existing entity (does not insert new identifiers).
+     * Updates an existing entity.
      *
-     * @param entity updated entity
-     * @throws IllegalArgumentException if entity or its identifier is null
-     * @throws RepositoryException if the entity does not exist or persistence fails
+     * @param entity the updated entity
+     * @throws IllegalArgumentException if entity or its ID is null
+     * @throws RepositoryException if the entity does not exist
+     *         or persistence fails
      */
     void update(E entity);
 }
+

@@ -10,10 +10,9 @@ import validation.Validator;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Optional;
 
 /**
- * Application logic for creating, deleting and listing undirected friendships.
+ * Provides application operations for undirected friendships.
  */
 public class FriendshipService {
 
@@ -22,11 +21,11 @@ public class FriendshipService {
     private final Validator<Friendship> validator;
 
     /**
-     * Creates a friendship service with injected dependencies.
+     * Creates the friendship service.
      *
      * @param userRepository user repository
      * @param friendshipRepository friendship repository
-     * @param validator friendship validator
+     * @param validator friendship validation strategy
      */
     public FriendshipService(
             Repository<Long, User> userRepository,
@@ -39,80 +38,72 @@ public class FriendshipService {
     }
 
     /**
-     * Adds an undirected friendship dated at the current local time.
+     * Creates a new friendship using the current local date and time.
      *
-     * @param userId1 first user ID
-     * @param userId2 second user ID
-     * @throws exceptions.ValidationException when IDs are invalid
-     * @throws ServiceException when a user is missing or friendship exists
-     * @throws exceptions.RepositoryException if saving fails
+     * @param id1 first user identifier
+     * @param id2 second user identifier
+     * @throws exceptions.ValidationException if the friendship is invalid
+     * @throws ServiceException if either user is missing or friendship exists
      */
-    public void addFriendship(Long userId1, Long userId2) {
+    public void addFriendship(Long id1, Long id2) {
 
         Friendship friendship = new Friendship(
-                userId1,
-                userId2,
+                id1,
+                id2,
                 LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES)
         );
 
         validator.validate(friendship);
 
-        Optional<User> first = userRepository.findOne(userId1);
-        Optional<User> second = userRepository.findOne(userId2);
+        User firstUser = userRepository.findOne(id1)
+                .orElseThrow(() ->
+                        new ServiceException("First user does not exist."));
 
-        if (first.isEmpty() || second.isEmpty()) {
-            throw new ServiceException(
-                    "Both users must exist."
-            );
-        }
+        User secondUser = userRepository.findOne(id2)
+                .orElseThrow(() ->
+                        new ServiceException("Second user does not exist."));
 
         if (friendshipRepository.findOne(friendship.getId()).isPresent()) {
-            throw new ServiceException(
-                    "Friendship already exists."
-            );
+            throw new ServiceException("Friendship already exists.");
         }
 
         friendshipRepository.save(friendship);
 
-        first.get().addFriend(userId2);
-        second.get().addFriend(userId1);
+        firstUser.addFriend(id2);
+        secondUser.addFriend(id1);
     }
 
     /**
-     * Removes an undirected friendship, regardless of endpoint order.
+     * Deletes an undirected friendship.
      *
-     * @param userId1 first user ID
-     * @param userId2 second user ID
+     * @param id1 first user identifier
+     * @param id2 second user identifier
      * @throws ServiceException if the friendship does not exist
-     * @throws exceptions.RepositoryException if persistence fails
      */
-    public void removeFriendship(Long userId1, Long userId2) {
+    public void removeFriendship(Long id1, Long id2) {
 
-        Tuple<Long, Long> id =
-                Friendship.normalizedId(userId1, userId2);
+        Tuple<Long, Long> friendshipId =
+                Friendship.normalizedId(id1, id2);
 
-        if (id == null || !friendshipRepository.delete(id)) {
+        if (friendshipId == null
+                || !friendshipRepository.delete(friendshipId)) {
+
             throw new ServiceException(
                     "Friendship does not exist."
             );
         }
 
-        Optional<User> first = userRepository.findOne(userId1);
-        Optional<User> second = userRepository.findOne(userId2);
+        userRepository.findOne(id1)
+                .ifPresent(user -> user.removeFriend(id2));
 
-        if (first.isPresent()) {
-            first.get().removeFriend(userId2);
-        }
-
-        if (second.isPresent()) {
-            second.get().removeFriend(userId1);
-        }
+        userRepository.findOne(id2)
+                .ifPresent(user -> user.removeFriend(id1));
     }
 
     /**
-     * Lists all friendships.
+     * Returns all friendships.
      *
-     * @return snapshot of stored friendships
+     * @return list of stored friendships
      */
     public List<Friendship> getAllFriendships() {
         return friendshipRepository.findAll();
