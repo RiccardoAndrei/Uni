@@ -1,107 +1,91 @@
-1 . RepositoryFactory : are rolul de a crea repository-urile corespunzatoare tipului de persistenta ales.
-    Tipul de persistenta este ales in config.properties.
-    Avem 3 tipuri :
-    1. MEMORY - datele sunt pastrate in memorie folosind InMemoryRepository
-    2. FILE - datele sunt pastrate in fisiere text , UtilizatorFileRepository si PrietenieFIleRepository
-    3. DATABASE - datele sunt in baze de date
+## 1. Tabel înainte/după – bucle înlocuite cu Stream API
 
-    Factory-ul conține metodele:
-    createUtilizatorRepository(validator)
-    createPrietenieRepository(validator)
-    Aceste metode returnează obiecte prin interfața generică Repository, nu prin tipurile concrete.
-    Avantajul este că Main, clasele din service și interfața cu utilizatorul nu trebuie modificate atunci
-    când schimbăm tipul de persistență.
+CLASA               METODA               LAB3                                   LAB4
+1.UserService       removeUser()        for pentru parcurgerea prieteniilor     stream() , filter() ,
+                                        si identificarea celor care trebuie     collect() , forEach()
+                                        sterse
 
-    Pentru trecerea la persistenta la baza de date trebuie implementate metodele claselor :
-        UtilizatorDbRepository
-        PrietenieDbRepository
-    Si trebuie sa schimbam in config.properties repository = DATABASE
+2.AbstractFileRepository  loadFromFile() while cu reader.readLine() pentru      Files.lines()
+                                         citirea liniilor                       collect(),
+                                                                                IntStream.range(),filter().
+                                                                                forEach()
+3.AbstractFileRepository  writeToFile()  for pentru transformarea entitatiilor  stream() , map() , collect,
+                                         in linii de text                       Files.write()
 
-2 . Citirea și scrierea fișierelor sunt gestionate de clasa AbstractFileRepository.
-    Fișier inexistent : Dacă fișierul de utilizatori sau de prietenii nu există la pornirea aplicației,
-    repository-ul corespunzător pornește gol.
-    Aplicația nu se oprește din cauza absenței fișierului.
-    La prima operație de salvare reușită, fișierul este creat automat.
+4.CommunityService     buildGraph()      Doua bucle for : una pentru utilizatori stream() , map() , filter
+                                         si una pentru prietenii                 collect(toMap) , si
+                                                                                 collect(toSet)
 
-    Linie coruptă sau invalidă :
-    La încărcarea datelor, fiecare linie este transformată într-o entitate și verificată prin validator.
-    Dacă o linie conține date invalide, de exemplu un ID care nu este numeric, o dată incorectă sau câmpuri
-    lipsă, aceasta este ignorată.
+5.CommunityService     longestPath()    for pentru explorarea vecinilor         stream() , filter() ,
+                                        si calcularea drumului maxim            mapToInt() , max()
 
-    Pentru tratarea erorilor folosim ValidationException și RepositoryException. Erorile de citire,
-    scriere și conversie sunt raportate prin excepții care păstrează cauza inițială atunci când este necesar.
+## 2. Operații intermediare și terminale
 
-3. Principiile SOLID utilizate
+Un pipeline de stream pornește de la o sursă de date, aplică operații intermediare și se încheie cu operație terminală.
 
-    SRP – Single Responsibility Principle
-    Principiul spune că fiecare clasă trebuie să aibă o responsabilitate principală.
-    În proiect:
+**Operații intermediare:**
+- `filter()` – selectează elementele care respectă o condiție.
+- `map()` – transformă fiecare element.
+- `flatMap()` – transformă și aplatizează rezultatele.
+- `sorted()` – sortează elementele.
+- `distinct()` – elimină duplicatele.
 
-    User si Friendship reprezintă entitatile domeniului.
-    UserService gestionează operatiile asupra utilizatorilor.
-    FriendshipService gestioneaza prieteniile.
-    CommunityService implementeaza algoritmii pentru comunitati.
-    AbstractFileRepository gestionează persistența în fișiere.
-    ConsoleUI gestionează interacțiunea cu utilizatorul.
-    RepositoryFactory este responsabilă de crearea repository-urilor.
+**Operații terminale:**
+- `collect()` – construiește o colecție.
+- `count()` – numără elementele.
+- `max()` / `min()` – determină un element extrem.
+- `reduce()` – combină elementele.
+- `forEach()` – execută o acțiune pentru fiecare element.
 
-    OCP – Open/Closed Principle
-    Principiul spune că o componentă trebuie să fie deschisă pentru extindere, dar închisă pentru modificare.
-    În proiect folosim interfața Repository și interfața Validator.
-    Putem crea noi implementări ale acestora fără să modificăm codul serviciilor.
-    De exemplu, putem introduce un validator cu reguli mai stricte fără să modificăm InMemoryRepository.
-    De asemenea, putem implementa repository-uri pentru baza de date fără să modificăm serviciile existente.
+Exemplu din UserService.removeUser():
 
-    DIP – Dependency Inversion Principle
-    Principiul spune că modulele de nivel înalt trebuie să depindă de abstracții, nu de implementări concrete.
-    În proiect, clasele UserService, FriendshipService și CommunityService folosesc interfața Repository.
-    Aceste clase nu depind direct de InMemoryRepository, UtilizatorFileRepository sau de repository-urile
-    pentru baza de date.
-    Repository-urile primesc și validatorii prin interfața Validator.
-    Prin urmare, implementările pot fi schimbate fără modificarea logicii aplicației.
+List<Friendship> friendshipsToDelete =
+        friendshipRepository.findAll().stream()
+                .filter(friendship ->
+                        friendship.getUserId1().equals(id)
+                        || friendship.getUserId2().equals(id))
+                .collect(Collectors.toList());
 
+În acest exemplu, `stream()` creează fluxul, `filter()` este operație intermediară, iar `collect()` este operație terminală.
 
-    LSP – Liskov Substitution Principle
-    Principiul spune că o clasă derivată trebuie să poată înlocui clasa de bază fără să modifice
-    comportamentul așteptat al programului.
-    InMemoryRepository și AbstractFileRepository respectă contractul definit de interfața Repository.
-    De exemplu, apelul delete(null) trebuie să arunce IllegalArgumentException, indiferent de implementarea folosită.
-    Entity și Tuple implementează corect metodele equals() și hashCode(), pentru identificarea și compararea entităților.
+## 4. Interfețe funcționale utilizate
 
-4. Șabloane de proiectare utilizate
+Interfață funcțională                   Unde este utilizată                           Rol
+1.Validator<T> Validator.java           Main.java                     Validarea entităților și compunerea                                                                       regulilor cu andThen()
+2.Predicate<T> Repository.java          CriteriiUtilizator.java       Definirea și combinarea criteriilor                                                                       de căutare
+3.Function<T,R>                         RepositoryFactory.java        Crearea repository-urilor și                                                                              transformarea valorilor
+4.Consumer<T>                           ConsoleUI.java operații       Executarea unei actiuni pentru                                              forEach()                     fiecare element
+5.Supplier<T>                           ArrayList::new în InMemoryRepository  Crearea unui obiect la cerere
 
-    Factory Pattern
-    Este utilizat în clasa RepositoryFactory.
-    Factory-ul creează repository-urile în funcție de configurarea aplicației, centralizând alegerea
-    implementărilor concrete.
+6.Comparator<T>                         UserService.java CommunityService.java Sortarea utilizatorilor și                                                                                compararea comunităților
 
-    Template Method Pattern
-    Este utilizat în clasa AbstractFileRepository.
-    Această clasă conține algoritmul comun pentru încărcarea datelor și salvarea lor în fișiere text.
-    Clasele UtilizatorFileRepository și PrietenieFileRepository implementează doar
-    metodele specifice conversiei:
-    extractEntity(String line) – transformă o linie într-o entitate.
-    createEntityAsString(E entity) – transformă o entitate într-o linie de text.
-    Astfel, codul pentru citirea și scrierea fișierelor nu este duplicat în subclase.
-    La încărcarea datelor se utilizează super.save(entity), pentru a valida și salva entitățile în memorie
-    fără rescrierea fișierului în timpul citirii.
+7.BinaryOperator<T>                     Integer::sum în Lab4Demo.java           Combinarea valorilor  prin
+                                                                                reduce()
 
-    Strategy Pattern
-    Este utilizat pentru validarea entităților.
-    Interfața generică Validator<T> definește metoda validate(T entity).
-    Implementările sunt:
-    UserValidator
-    FriendshipValidator
-    FriendshipWithUsersValidator
-    Validatorul este transmis prin constructor, astfel încât regulile de validare pot fi schimbate fără
-    modificarea repository-ului.
+Am folosit cele patru tipuri de referințe la metode:
+- Metodă statică: CriteriiUtilizator::faraPrieteni
+- Metodă de instanță a unui obiect: System.out::println
+- Metodă de instanță a unui obiect oarecare: User::getLastName
+- Constructor: InMemoryRepository::new, ArrayList::new
 
-    Decorator Pattern
-    Conceptul de Decorator apare în operațiile de intrare/ieșire prin utilizarea BufferedReader și
-    BufferedWriter.
-    Aceste clase adaugă funcționalități de buffering peste operațiile de citire și scriere,
-    îmbunătățind eficiența.
-    În proiect folosim Files.newBufferedReader() și Files.newBufferedWriter(), împreună cu
-    try-with-resources, pentru închiderea automată a resurselor.
-    Un alt exemplu este FriendshipWithUsersValidator, care primește un Validator<Friendship> și
-    adaugă verificarea existenței utilizatorilor, delegând validarea de bază validatorului primit.
+## 5. Alegerea pentru Optional în Repository
+Am ales să păstrez Optional<E> ca tip de retur pentru metoda findOne(ID id) din interfața Repository.
+Motivul este că o căutare poate să nu găsească entitatea solicitată.
+Optional permite tratarea explicită a acestui caz, fără utilizarea valorii null.
+
+## 6. Alegerea pentru Template Method vs. Function
+Am ales să păstrez design pattern-ul **Template Method** pentru persistența în fișiere.
+Clasa AbstractFileRepository implementează algoritmul general de citire și scriere a fișierelor.
+Clasele UtilizatorFileRepository și PrietenieFileRepository implementează metodele specifice de conversie:
+- extractEntity(String line) – transformă textul în entitate.
+- createEntityAsString(E entity) – transformă entitatea în text.
+
+## 7. Bucle păstrate și justificare
+
+În ConsoleUI.run() am păstrat bucla:
+
+while (running) {
+    // Menu operations
+}
+
+Această buclă controlează repetarea meniului până când utilizatorul alege ieșirea. Ea nu este folosită pentru parcurgerea unei colecții.

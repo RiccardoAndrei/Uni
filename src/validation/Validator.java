@@ -1,4 +1,3 @@
-
 package validation;
 
 import exceptions.ValidationException;
@@ -10,7 +9,6 @@ import exceptions.ValidationException;
  */
 @FunctionalInterface
 public interface Validator<T> {
-
     /**
      * Validates an entity.
      *
@@ -18,7 +16,6 @@ public interface Validator<T> {
      * @throws ValidationException if the entity is invalid
      */
     void validate(T entity);
-
     /**
      * Combines this validator with another validator.
      * The current validator is executed first.
