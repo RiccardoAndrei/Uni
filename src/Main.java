@@ -36,7 +36,6 @@ public class Main {
         try {
             RepositoryFactory factory = new RepositoryFactory();
 
-            // Compose a new rule using a lambda.
             Validator<User> userValidator =
                     new UserValidator().andThen(user -> {
 

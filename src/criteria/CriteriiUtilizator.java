@@ -20,6 +20,7 @@ public final class CriteriiUtilizator {
      * @return true if the user has no friends
      */
     public static boolean faraPrieteni(User user) {
+
         return user.getFriends().isEmpty();
     }
 
@@ -69,6 +70,7 @@ public final class CriteriiUtilizator {
      * @return a predicate checking the friend count
      */
     public static Predicate<User> minimPrieteni(int minimum) {
+
         return user -> user.getFriends().size() >= minimum;
     }
 }

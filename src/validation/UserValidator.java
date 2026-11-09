@@ -1,4 +1,3 @@
-
 package validation;
 
 import domain.User;
@@ -77,7 +76,6 @@ public class UserValidator implements Validator<User> {
         boolean hasEmail = email != null && !email.isBlank();
         boolean hasBirthDate = birthDate != null;
 
-        // Old Lab 3 users can have all three fields missing.
         boolean legacyProfile =
                 !hasCity && !hasEmail && !hasBirthDate;
 
