@@ -44,7 +44,7 @@ public class ConsoleUI {
     }
 
     private void printMenu() {
-        System.out.println("\n===== SOCIAL NETWORK =====");
+        System.out.println("\nSocial Network");
         System.out.println("1. Add user");
         System.out.println("2. Remove user");
         System.out.println("3. Add friendship");
