@@ -20,11 +20,10 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 /**
- * File repository using Template Method and Stream API.
- * Data is stored in UTF-8 text files.
+ * Template Method for file-based persistence.
  *
- * @param <ID> the identifier type
- * @param <E> the entity type
+ * @param <ID> identifier type
+ * @param <E> entity type
  */
 public abstract class AbstractFileRepository<ID, E extends Entity<ID>>
         extends InMemoryRepository<ID, E> {
@@ -32,15 +31,13 @@ public abstract class AbstractFileRepository<ID, E extends Entity<ID>>
     private final Path filePath;
 
     /**
-     * Initializes the file repository.
+     * Creates a file repository.
      *
-     * @param filePath the file path
-     * @param validator the entity validator
-     * @throws IllegalArgumentException if filePath is null
+     * @param filePath file location
+     * @param validator entity validator
      */
     protected AbstractFileRepository(
-            Path filePath,
-            Validator<E> validator) {
+            Path filePath, Validator<E> validator) {
 
         super(validator);
 
@@ -54,27 +51,23 @@ public abstract class AbstractFileRepository<ID, E extends Entity<ID>>
     }
 
     /**
-     * Converts a text line into an entity.
+     * Converts text into an entity.
      *
-     * @param line the text line
-     * @return the converted entity
-     * @throws RepositoryException if parsing fails
+     * @param line file line
+     * @return parsed entity
      */
     protected abstract E extractEntity(String line);
 
     /**
-     * Converts an entity into a text line.
+     * Converts an entity into text.
      *
-     * @param entity the entity
-     * @return the formatted text
+     * @param entity entity to serialize
+     * @return text representation
      */
     protected abstract String createEntityAsString(E entity);
 
     /**
-     * Loads data from the file using Stream API.
-     * Invalid lines are reported and ignored.
-     *
-     * @throws RepositoryException if the file cannot be read
+     * Loads valid records from the file.
      */
     protected final void loadFromFile() {
         if (!Files.exists(filePath)) {
@@ -84,25 +77,25 @@ public abstract class AbstractFileRepository<ID, E extends Entity<ID>>
         try (Stream<String> lines = Files.lines(
                 filePath, StandardCharsets.UTF_8)) {
 
-            List<String> records = lines.collect(Collectors.toList());
+            List<String> records =
+                    lines.collect(Collectors.toList());
 
             IntStream.range(0, records.size())
-                    .filter(index -> !records.get(index).isBlank())
-                    .forEach(index -> {
+                    .filter(i -> !records.get(i).isBlank())
+                    .forEach(i -> {
                         try {
-                            E entity = extractEntity(records.get(index));
-
-                            // Avoid rewriting the file while loading.
-                            super.save(entity);
+                            super.save(
+                                    extractEntity(records.get(i))
+                            );
 
                         } catch (ValidationException
                                  | RepositoryException
                                  | IllegalArgumentException e) {
 
                             System.err.println(
-                                    "Invalid line " + (index + 1)
-                                            + " in '" + filePath
-                                            + "': " + e.getMessage()
+                                    "Invalid line " + (i + 1)
+                                            + " in " + filePath
+                                            + ": " + e.getMessage()
                             );
                         }
                     });
@@ -121,7 +114,6 @@ public abstract class AbstractFileRepository<ID, E extends Entity<ID>>
 
         try {
             writeToFile();
-
         } catch (RepositoryException e) {
             super.delete(entity.getId());
             throw e;
@@ -130,20 +122,20 @@ public abstract class AbstractFileRepository<ID, E extends Entity<ID>>
 
     /** {@inheritDoc} */
     @Override
-    public boolean delete(ID id) {
+    public E delete(ID id) {
         checkId(id);
 
         Optional<E> previous = super.findOne(id);
 
         if (previous.isEmpty()) {
-            return false;
+            return null;
         }
 
         super.delete(id);
 
         try {
             writeToFile();
-            return true;
+            return previous.orElseThrow();
 
         } catch (RepositoryException e) {
             super.save(previous.orElseThrow());
@@ -153,11 +145,17 @@ public abstract class AbstractFileRepository<ID, E extends Entity<ID>>
 
     /** {@inheritDoc} */
     @Override
-    public void update(E entity) {
+    public E update(E entity) {
         checkEntity(entity);
 
-        Optional<E> previous = super.findOne(entity.getId());
-        super.update(entity);
+        Optional<E> previous =
+                super.findOne(entity.getId());
+
+        E notFound = super.update(entity);
+
+        if (notFound != null) {
+            return notFound;
+        }
 
         try {
             writeToFile();
@@ -166,12 +164,12 @@ public abstract class AbstractFileRepository<ID, E extends Entity<ID>>
             previous.ifPresent(super::update);
             throw e;
         }
+
+        return null;
     }
 
     /**
-     * Rewrites the text file using a temporary file.
-     *
-     * @throws RepositoryException if writing fails
+     * Rewrites the UTF-8 file using a temporary file.
      */
     private void writeToFile() {
         Path parent = filePath.toAbsolutePath().getParent();
@@ -184,13 +182,13 @@ public abstract class AbstractFileRepository<ID, E extends Entity<ID>>
                     parent, "repository-", ".tmp"
             );
 
-            List<String> lines = super.findAll().stream()
+            List<String> records = super.findAll().stream()
                     .map(this::createEntityAsString)
                     .collect(Collectors.toList());
 
             Files.write(
                     temporary,
-                    lines,
+                    records,
                     StandardCharsets.UTF_8
             );
 
@@ -219,10 +217,9 @@ public abstract class AbstractFileRepository<ID, E extends Entity<ID>>
             if (temporary != null) {
                 try {
                     Files.deleteIfExists(temporary);
-
                 } catch (IOException e) {
                     System.err.println(
-                            "Could not delete temporary file: "
+                            "Temporary file cleanup failed: "
                                     + e.getMessage()
                     );
                 }

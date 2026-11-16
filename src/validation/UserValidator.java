@@ -6,64 +6,80 @@ import exceptions.ValidationException;
 import java.time.LocalDate;
 
 /**
- * Validates a user and reports all validation errors
- * in a single ValidationException.
+ * Validates users for memory, file and database storage.
  */
 public class UserValidator implements Validator<User> {
 
+    private final boolean databaseMode;
+
     /**
-     * Validates the identifier, names and profile information.
-     * Legacy users without profile information are also accepted.
-     *
-     * @param user user to validate
-     * @throws ValidationException if the user contains invalid data
+     * Creates a validator for manually assigned IDs.
      */
+    public UserValidator() {
+        this(false);
+    }
+
+    /**
+     * Creates a validator for the selected storage mode.
+     *
+     * @param databaseMode true when PostgreSQL generates IDs
+     */
+    public UserValidator(boolean databaseMode) {
+        this.databaseMode = databaseMode;
+    }
+
+    /** {@inheritDoc} */
     @Override
     public void validate(User user) {
 
         if (user == null) {
             throw new ValidationException(
-                    "User cannot be null."
+                    "User must not be null."
             );
         }
 
         StringBuilder errors = new StringBuilder();
 
-        if (user.getId() == null || user.getId() <= 0) {
-            errors.append("User ID must be positive.\n");
+        if ((user.getId() == null && !databaseMode)
+                || (user.getId() != null
+                && user.getId() <= 0)) {
+
+            errors.append("Invalid user ID.\n");
         }
 
         String firstName = user.getFirstName();
         String lastName = user.getLastName();
 
         if (firstName == null || firstName.isBlank()) {
-            errors.append("First name cannot be empty.\n");
+            errors.append("First name is required.\n");
+
         } else {
             if (!Character.isUpperCase(firstName.charAt(0))) {
                 errors.append(
-                        "First name must start with an uppercase letter.\n"
+                        "First name must start with uppercase.\n"
                 );
             }
 
-            if (containsInvalidCharacters(firstName)) {
+            if (!databaseMode && invalidFileText(firstName)) {
                 errors.append(
-                        "First name contains invalid characters.\n"
+                        "Invalid characters in first name.\n"
                 );
             }
         }
 
         if (lastName == null || lastName.isBlank()) {
-            errors.append("Last name cannot be empty.\n");
+            errors.append("Last name is required.\n");
+
         } else {
             if (!Character.isUpperCase(lastName.charAt(0))) {
                 errors.append(
-                        "Last name must start with an uppercase letter.\n"
+                        "Last name must start with uppercase.\n"
                 );
             }
 
-            if (containsInvalidCharacters(lastName)) {
+            if (!databaseMode && invalidFileText(lastName)) {
                 errors.append(
-                        "Last name contains invalid characters.\n"
+                        "Invalid characters in last name.\n"
                 );
             }
         }
@@ -72,51 +88,46 @@ public class UserValidator implements Validator<User> {
         String email = user.getEmail();
         LocalDate birthDate = user.getBirthDate();
 
-        boolean hasCity = city != null && !city.isBlank();
-        boolean hasEmail = email != null && !email.isBlank();
-        boolean hasBirthDate = birthDate != null;
+        boolean hasCity =
+                city != null && !city.isBlank();
 
-        boolean legacyProfile =
-                !hasCity && !hasEmail && !hasBirthDate;
+        boolean hasEmail =
+                email != null && !email.isBlank();
 
-        if (!legacyProfile) {
+        // Old users may have no extended profile fields.
+        if (hasCity || hasEmail || birthDate != null) {
 
             if (!hasCity) {
-                errors.append("City cannot be empty.\n");
-            } else if (containsInvalidCharacters(city)) {
-                errors.append(
-                        "City contains invalid characters.\n"
-                );
+                errors.append("City is required.\n");
+
+            } else if (!databaseMode && invalidFileText(city)) {
+                errors.append("Invalid city.\n");
             }
 
-            if (!hasEmail) {
-                errors.append("Email cannot be empty.\n");
-
-            } else if (!email.matches(
+            if (!hasEmail || !email.matches(
                     "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"
             )) {
-                errors.append("Invalid email address.\n");
+                errors.append("Invalid email.\n");
             }
 
-            if (!hasBirthDate) {
-                errors.append("Birth date cannot be empty.\n");
+            if (birthDate == null
+                    || birthDate.isAfter(LocalDate.now())) {
 
-            } else if (birthDate.isAfter(LocalDate.now())) {
-                errors.append(
-                        "Birth date cannot be in the future.\n"
-                );
+                errors.append("Invalid birth date.\n");
             }
         }
 
         if (errors.length() > 0) {
-            throw new ValidationException(errors.toString());
+            throw new ValidationException(
+                    errors.toString()
+            );
         }
     }
 
-    private boolean containsInvalidCharacters(String value) {
-        return value.contains(";")
-                || value.contains("\n")
-                || value.contains("\r");
+    private boolean invalidFileText(String text) {
+        return text.contains(";")
+                || text.contains("\r")
+                || text.contains("\n");
     }
 }
 

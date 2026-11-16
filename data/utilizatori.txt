@@ -1,4 +1,3 @@
-1;Ana;Popescu;Cluj-Napoca;ana.popescu@example.com;2003-05-17
 2;Ion;Ionescu;Alba Iulia;ion.ionescu@example.com;2002-08-24
 3;Maria;Georgescu;Bucuresti;maria.georgescu@example.com;2004-02-12
 4;Alex;Popa;Sibiu;alex.popa@example.com;2001-11-05

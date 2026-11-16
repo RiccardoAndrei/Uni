@@ -6,6 +6,7 @@ import exceptions.RepositoryException;
 import exceptions.ValidationException;
 
 import repository.Repository;
+import repository.RepositoryType;
 import repository.factory.RepositoryFactory;
 
 import service.CommunityService;
@@ -19,7 +20,7 @@ import validation.UserValidator;
 import validation.Validator;
 
 /**
- * Main entry point for the Lab 4 social network application.
+ * Application entry point for Laboratory 5.
  */
 public class Main {
 
@@ -27,26 +28,32 @@ public class Main {
     }
 
     /**
-     * Initializes repositories, services and the console interface.
+     * Creates repositories and services and starts the UI.
      *
      * @param args unused command-line arguments
      */
     public static void main(String[] args) {
 
         try {
-            RepositoryFactory factory = new RepositoryFactory();
+            RepositoryFactory factory =
+                    new RepositoryFactory();
+
+            boolean databaseMode =
+                    factory.getType() == RepositoryType.DATABASE;
 
             Validator<User> userValidator =
-                    new UserValidator().andThen(user -> {
+                    new UserValidator(databaseMode)
+                            .andThen(user -> {
 
-                        if (user.getFirstName().length() > 50
-                                || user.getLastName().length() > 50) {
+                                if (user.getFirstName().length() > 50
+                                        || user.getLastName().length() > 50) {
 
-                            throw new ValidationException(
-                                    "Names may contain at most 50 characters."
-                            );
-                        }
-                    });
+                                    throw new ValidationException(
+                                            "Names must have at most "
+                                                    + "50 characters."
+                                    );
+                                }
+                            });
 
             Repository<Long, User> userRepository =
                     factory.createUtilizatorRepository(
@@ -65,25 +72,29 @@ public class Main {
                     userValidator
             );
 
-            FriendshipService friendshipService = new FriendshipService(
-                    userRepository,
-                    friendshipRepository,
-                    new FriendshipValidator()
-            );
+            FriendshipService friendshipService =
+                    new FriendshipService(
+                            userRepository,
+                            friendshipRepository,
+                            new FriendshipValidator()
+                    );
 
-            CommunityService communityService = new CommunityService(
-                    userRepository,
-                    friendshipRepository
-            );
+            CommunityService communityService =
+                    new CommunityService(
+                            userRepository,
+                            friendshipRepository
+                    );
 
             System.out.println(
-                    "Repository type: " + factory.getType()
+                    "Selected repository type: "
+                            + factory.getType()
             );
 
             ConsoleUI ui = new ConsoleUI(
                     userService,
                     friendshipService,
-                    communityService
+                    communityService,
+                    databaseMode
             );
 
             ui.run();

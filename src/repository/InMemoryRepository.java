@@ -12,10 +12,10 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * Generic in-memory repository using a HashMap.
+ * In-memory repository backed by a HashMap.
  *
- * @param <ID> the identifier type
- * @param <E> the entity type
+ * @param <ID> identifier type
+ * @param <E> entity type
  */
 public class InMemoryRepository<ID, E extends Entity<ID>>
         implements Repository<ID, E> {
@@ -26,8 +26,7 @@ public class InMemoryRepository<ID, E extends Entity<ID>>
     /**
      * Creates an empty repository.
      *
-     * @param validator the validation strategy
-     * @throws IllegalArgumentException if validator is null
+     * @param validator entity validator
      */
     public InMemoryRepository(Validator<E> validator) {
         if (validator == null) {
@@ -35,7 +34,6 @@ public class InMemoryRepository<ID, E extends Entity<ID>>
                     "Validator must not be null."
             );
         }
-
         this.validator = validator;
     }
 
@@ -47,7 +45,7 @@ public class InMemoryRepository<ID, E extends Entity<ID>>
 
         if (entities.containsKey(entity.getId())) {
             throw new RepositoryException(
-                    "Entity already exists: " + entity.getId()
+                    "Duplicate ID: " + entity.getId()
             );
         }
 
@@ -70,45 +68,42 @@ public class InMemoryRepository<ID, E extends Entity<ID>>
 
     /** {@inheritDoc} */
     @Override
-    public boolean delete(ID id) {
+    public E delete(ID id) {
         checkId(id);
-        return entities.remove(id) != null;
+        return entities.remove(id);
     }
 
     /** {@inheritDoc} */
     @Override
-    public void update(E entity) {
+    public E update(E entity) {
         checkEntity(entity);
         validator.validate(entity);
 
         if (!entities.containsKey(entity.getId())) {
-            throw new RepositoryException(
-                    "Entity does not exist: " + entity.getId()
-            );
+            return entity;
         }
 
         entities.put(entity.getId(), entity);
+        return null;
     }
 
     /**
-     * Checks whether an identifier is valid.
+     * Validates an identifier.
      *
-     * @param id the identifier
-     * @throws IllegalArgumentException if id is null
+     * @param id identifier
      */
     protected void checkId(ID id) {
         if (id == null) {
             throw new IllegalArgumentException(
-                    "Entity ID must not be null."
+                    "ID must not be null."
             );
         }
     }
 
     /**
-     * Checks whether an entity and its ID are valid.
+     * Validates an entity and its ID.
      *
-     * @param entity the entity to check
-     * @throws IllegalArgumentException if entity or ID is null
+     * @param entity entity to check
      */
     protected void checkEntity(E entity) {
         if (entity == null || entity.getId() == null) {

@@ -12,12 +12,15 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
- * Provides application operations for undirected friendships.
+ * Provides operations for undirected friendships.
  */
 public class FriendshipService {
 
     private final Repository<Long, User> userRepository;
-    private final Repository<Tuple<Long, Long>, Friendship> friendshipRepository;
+
+    private final Repository<Tuple<Long, Long>, Friendship>
+            friendshipRepository;
+
     private final Validator<Friendship> validator;
 
     /**
@@ -25,7 +28,7 @@ public class FriendshipService {
      *
      * @param userRepository user repository
      * @param friendshipRepository friendship repository
-     * @param validator friendship validation strategy
+     * @param validator friendship validator
      */
     public FriendshipService(
             Repository<Long, User> userRepository,
@@ -38,47 +41,54 @@ public class FriendshipService {
     }
 
     /**
-     * Creates a new friendship using the current local date and time.
+     * Adds a friendship with the current date.
      *
-     * @param id1 first user identifier
-     * @param id2 second user identifier
-     * @throws exceptions.ValidationException if the friendship is invalid
-     * @throws ServiceException if either user is missing or friendship exists
+     * @param id1 first user ID
+     * @param id2 second user ID
      */
     public void addFriendship(Long id1, Long id2) {
 
         Friendship friendship = new Friendship(
                 id1,
                 id2,
-                LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES)
+                LocalDateTime.now()
+                        .truncatedTo(ChronoUnit.MINUTES)
         );
 
         validator.validate(friendship);
 
-        User firstUser = userRepository.findOne(id1)
+        User first = userRepository.findOne(id1)
                 .orElseThrow(() ->
-                        new ServiceException("First user does not exist."));
+                        new ServiceException(
+                                "First user does not exist."
+                        ));
 
-        User secondUser = userRepository.findOne(id2)
+        User second = userRepository.findOne(id2)
                 .orElseThrow(() ->
-                        new ServiceException("Second user does not exist."));
+                        new ServiceException(
+                                "Second user does not exist."
+                        ));
 
-        if (friendshipRepository.findOne(friendship.getId()).isPresent()) {
-            throw new ServiceException("Friendship already exists.");
+        if (friendshipRepository.findOne(
+                friendship.getId()).isPresent()) {
+
+            throw new ServiceException(
+                    "Friendship already exists."
+            );
         }
 
         friendshipRepository.save(friendship);
 
-        firstUser.addFriend(id2);
-        secondUser.addFriend(id1);
+        first.addFriend(id2);
+        second.addFriend(id1);
     }
 
     /**
-     * Deletes an undirected friendship.
+     * Removes a friendship between two users.
      *
-     * @param id1 first user identifier
-     * @param id2 second user identifier
-     * @throws ServiceException if the friendship does not exist
+     * @param id1 first user ID
+     * @param id2 second user ID
+     * @throws ServiceException if friendship does not exist
      */
     public void removeFriendship(Long id1, Long id2) {
 
@@ -86,7 +96,7 @@ public class FriendshipService {
                 Friendship.normalizedId(id1, id2);
 
         if (friendshipId == null
-                || !friendshipRepository.delete(friendshipId)) {
+                || friendshipRepository.delete(friendshipId) == null) {
 
             throw new ServiceException(
                     "Friendship does not exist."
@@ -103,7 +113,7 @@ public class FriendshipService {
     /**
      * Returns all friendships.
      *
-     * @return list of stored friendships
+     * @return list of friendships
      */
     public List<Friendship> getAllFriendships() {
         return friendshipRepository.findAll();

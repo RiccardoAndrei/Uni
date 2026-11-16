@@ -1,4 +1,3 @@
-
 package service;
 
 import criteria.CriteriiUtilizator;
@@ -6,7 +5,6 @@ import domain.Friendship;
 import domain.Tuple;
 import domain.User;
 import exceptions.ServiceException;
-import exceptions.ValidationException;
 import repository.Repository;
 import validation.Validator;
 
@@ -18,8 +16,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Provides user operations using repository abstractions
- * and Stream API.
+ * Provides user operations using repository abstractions.
  */
 public class UserService {
 
@@ -35,7 +32,7 @@ public class UserService {
      *
      * @param userRepository user repository
      * @param friendshipRepository friendship repository
-     * @param validator user validation strategy
+     * @param validator user validator
      */
     public UserService(
             Repository<Long, User> userRepository,
@@ -48,50 +45,42 @@ public class UserService {
     }
 
     /**
-     * Adds a legacy user with the original three fields.
+     * Adds a user with the original fields.
      *
-     * @param id user identifier
+     * @param id user ID
      * @param firstName first name
      * @param lastName last name
-     * @throws ValidationException if the user is invalid
+     * @return saved user
      */
-    public void addUser(
-            Long id, String firstName, String lastName) {
+    public User addUser(
+            Long id,
+            String firstName,
+            String lastName) {
 
-        User user = new User(id, firstName, lastName);
-
-        validator.validate(user);
-        userRepository.save(user);
+        return addUser(
+                id, firstName, lastName,
+                "", "", null
+        );
     }
 
     /**
-     * Adds a new user with complete profile information.
+     * Adds a user with extended profile information.
      *
-     * @param id user identifier
+     * @param id ID or null for a database-generated ID
      * @param firstName first name
      * @param lastName last name
      * @param city city of residence
      * @param email email address
-     * @param birthDate date of birth
-     * @throws ValidationException if the profile is invalid
-     * @throws exceptions.RepositoryException if saving fails
+     * @param birthDate birth date
+     * @return saved user with its identifier
      */
-    public void addUser(
+    public User addUser(
             Long id,
             String firstName,
             String lastName,
             String city,
             String email,
             LocalDate birthDate) {
-
-        if ((city == null || city.isBlank())
-                && (email == null || email.isBlank())
-                && birthDate == null) {
-
-            throw new ValidationException(
-                    "City, email and birth date are required."
-            );
-        }
 
         User user = new User(
                 id,
@@ -104,13 +93,15 @@ public class UserService {
 
         validator.validate(user);
         userRepository.save(user);
+
+        return user;
     }
 
     /**
-     * Removes a user and all associated friendships.
+     * Removes a user and their friendships.
      *
-     * @param id user identifier
-     * @throws ServiceException if the user does not exist
+     * @param id user ID
+     * @throws ServiceException if user does not exist
      */
     public void removeUser(Long id) {
 
@@ -143,7 +134,8 @@ public class UserService {
             friendshipRepository.delete(friendship.getId());
 
             userRepository.findOne(otherId)
-                    .ifPresent(user -> user.removeFriend(id));
+                    .ifPresent(user ->
+                            user.removeFriend(id));
         });
 
         userRepository.delete(id);
@@ -152,17 +144,17 @@ public class UserService {
     /**
      * Returns all users.
      *
-     * @return stored users
+     * @return user list
      */
     public List<User> getAllUsers() {
         return userRepository.findAll();
     }
 
     /**
-     * Returns users matching a predicate.
+     * Finds users matching a predicate.
      *
      * @param criterion search predicate
-     * @return matching users sorted by last name and first name
+     * @return sorted matching users
      */
     public List<User> findUsers(Predicate<User> criterion) {
 
@@ -184,11 +176,10 @@ public class UserService {
     }
 
     /**
-     * Returns the friends of a specific user.
+     * Returns friends of a given user.
      *
-     * @param id user identifier
-     * @return friends sorted by last name and first name
-     * @throws ServiceException if the user does not exist
+     * @param id user ID
+     * @return sorted friend list
      */
     public List<User> getFriendsOfUser(Long id) {
 
